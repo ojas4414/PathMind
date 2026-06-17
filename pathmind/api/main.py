@@ -51,6 +51,7 @@ def run_episode_loop() -> None:
                 "action": action,
                 "car_volume": [round(v, 2) for v in obs[10:20]],
                 "signal_states": [round(v, 2) for v in obs[0:10]],
+                "policy_probs": [round(v, 4) for v in probs.tolist()],
                 "reward": round(reward, 2),
                 "total_reward": round(total_reward, 2),
             }

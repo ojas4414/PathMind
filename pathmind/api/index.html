@@ -163,28 +163,34 @@
       transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* ── Reward chart ── */
-    .chart-section {
+    /* ── Policy chart ── */
+    .policy-section {
       background: #141414;
       border: 1px solid #222;
       border-radius: 10px;
       padding: 16px 18px;
     }
-    .chart-header {
+    .policy-header {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
       margin-bottom: 14px;
     }
-    .chart-title {
+    .policy-title {
       font-size: 0.68rem;
       color: #555;
       text-transform: uppercase;
       letter-spacing: 0.1em;
     }
-    .chart-range {
-      font-size: 0.65rem;
-      color: #444;
+    .policy-confidence {
+      font-size: 0.68rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .policy-confidence span {
+      color: #4caf50;
+      font-variant-numeric: tabular-nums;
     }
     canvas {
       display: block;
@@ -216,12 +222,12 @@
 <main>
   <div class="grid" id="grid"></div>
 
-  <div class="chart-section">
-    <div class="chart-header">
-      <div class="chart-title">Step Reward</div>
-      <div class="chart-range" id="chart-range">last 50 steps</div>
+  <div class="policy-section">
+    <div class="policy-header">
+      <div class="policy-title">Policy Distribution</div>
+      <div class="policy-confidence">Confidence&nbsp;<span id="confidence">—</span></div>
     </div>
-    <canvas id="chart" height="110"></canvas>
+    <canvas id="policy-chart" height="130"></canvas>
   </div>
 </main>
 
@@ -246,65 +252,57 @@
     grid.appendChild(card);
   }
 
-  // ── Chart ─────────────────────────────────────────────────────────────────
-  const canvas = document.getElementById('chart');
-  const ctx = canvas.getContext('2d');
-  const history = [];   // last 50 reward values
-  const MAX_HIST = 50;
+  // ── Policy distribution chart ─────────────────────────────────────────────
+  const policyCanvas = document.getElementById('policy-chart');
+  const pctx = policyCanvas.getContext('2d');
 
-  function drawChart() {
-    const W = canvas.offsetWidth;
-    const H = canvas.height;
-    canvas.width = W;
-    ctx.clearRect(0, 0, W, H);
+  function policyEntropy(probs) {
+    return -probs.reduce((s, p) => p > 0 ? s + p * Math.log(p) : s, 0);
+  }
 
-    if (history.length < 2) return;
+  function drawPolicyChart(probs, action) {
+    const W = policyCanvas.offsetWidth;
+    const H = policyCanvas.height;
+    policyCanvas.width = W;
+    pctx.clearRect(0, 0, W, H);
 
-    const PAD = { top: 6, bottom: 6 };
-    const min = Math.min(...history);
-    const max = Math.max(...history);
-    const range = max - min || 1;
+    const PAD = { top: 26, bottom: 20, left: 6, right: 6 };
+    const drawW = W - PAD.left - PAD.right;
     const drawH = H - PAD.top - PAD.bottom;
+    const colW = drawW / 10;
+    const barW = Math.max(8, colW * 0.5);
 
-    const toX = i => (i / (history.length - 1)) * W;
-    const toY = v => PAD.top + drawH - ((v - min) / range) * drawH;
+    probs.forEach((p, i) => {
+      const cx = PAD.left + colW * i + colW / 2;
+      const barH = Math.max(2, p * drawH);
+      const x = cx - barW / 2;
+      const y = PAD.top + drawH - barH;
+      const isActive = i === action;
 
-    const pts = history.map((v, i) => ({ x: toX(i), y: toY(v) }));
+      // Bar fill
+      pctx.fillStyle = isActive ? '#4caf50' : '#1a2e1a';
+      if (isActive) {
+        pctx.shadowColor = '#4caf5055';
+        pctx.shadowBlur = 10;
+      }
+      pctx.fillRect(x, y, barW, barH);
+      pctx.shadowBlur = 0;
 
-    // Gradient fill
-    const grad = ctx.createLinearGradient(0, PAD.top, 0, H - PAD.bottom);
-    grad.addColorStop(0, 'rgba(76,175,80,0.25)');
-    grad.addColorStop(1, 'rgba(76,175,80,0.02)');
+      // Percentage label above bar
+      pctx.font = `${isActive ? 600 : 400} 10px Segoe UI, sans-serif`;
+      pctx.fillStyle = isActive ? '#4caf50' : '#3a4a3a';
+      pctx.textAlign = 'center';
+      pctx.fillText((p * 100).toFixed(0) + '%', cx, y - 6);
 
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, H - PAD.bottom);
-    pts.forEach(p => ctx.lineTo(p.x, p.y));
-    ctx.lineTo(pts[pts.length - 1].x, H - PAD.bottom);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
+      // Intersection number below
+      pctx.font = '10px Segoe UI, sans-serif';
+      pctx.fillStyle = isActive ? '#888' : '#333';
+      pctx.fillText(i + 1, cx, H - 4);
+    });
 
-    // Line
-    ctx.beginPath();
-    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    ctx.strokeStyle = '#4caf50';
-    ctx.lineWidth = 1.8;
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-
-    // Latest dot
-    const last = pts[pts.length - 1];
-    ctx.beginPath();
-    ctx.arc(last.x, last.y, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#4caf50';
-    ctx.fill();
-
-    // Min/max labels
-    ctx.font = '10px Segoe UI, sans-serif';
-    ctx.fillStyle = '#555';
-    ctx.textAlign = 'right';
-    ctx.fillText(max.toFixed(1), W - 2, PAD.top + 9);
-    ctx.fillText(min.toFixed(1), W - 2, H - PAD.bottom - 3);
+    // Confidence score
+    const conf = (1 - policyEntropy(probs) / Math.log(10)) * 100;
+    document.getElementById('confidence').textContent = conf.toFixed(0) + '%';
   }
 
   // ── State update ──────────────────────────────────────────────────────────
@@ -329,9 +327,10 @@
         'card' + (isActive ? ' active' : '');
     }
 
-    history.push(data.reward);
-    if (history.length > MAX_HIST) history.shift();
-    drawChart();
+    if (data.policy_probs) {
+      window._lastData = data;
+      drawPolicyChart(data.policy_probs, data.action);
+    }
   }
 
   // ── WebSocket with exponential back-off reconnect ─────────────────────────
@@ -366,7 +365,9 @@
   }
 
   connect();
-  window.addEventListener('resize', drawChart);
+  window.addEventListener('resize', () => {
+    if (window._lastData) drawPolicyChart(window._lastData.policy_probs, window._lastData.action);
+  });
 </script>
 </body>
 </html>
