@@ -1,0 +1,24 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# CMake build artifacts — keep only the compiled .pyd module
+pathmind/build/CMakeFiles/
+pathmind/build/traffic_env.dir/
+pathmind/build/x64/
+pathmind/build/*.vcxproj
+pathmind/build/*.vcxproj.filters
+pathmind/build/*.sln
+pathmind/build/CMakeCache.txt
+pathmind/build/cmake_install.cmake
+pathmind/build/ALL_BUILD.vcxproj
+pathmind/build/ALL_BUILD.vcxproj.filters
+pathmind/build/ZERO_CHECK.vcxproj
+pathmind/build/ZERO_CHECK.vcxproj.filters
+pathmind/build/Release/*.exp
+pathmind/build/Release/*.lib
+
+.env
+.DS_Store
+Thumbs.db

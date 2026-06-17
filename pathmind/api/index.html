@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PathMind — Traffic Signal Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #d4d4d4;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: #111;
+      border-bottom: 1px solid #1e1e1e;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+    .brand span { color: #4caf50; }
+
+    .stats {
+      display: flex;
+      gap: 32px;
+    }
+    .stat { text-align: center; }
+    .stat-label {
+      font-size: 0.65rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 2px;
+    }
+    .stat-value {
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: #e8e8e8;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .conn-badge {
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: #1e1e1e;
+      color: #555;
+      transition: background 0.3s, color 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .conn-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .conn-badge.connected { background: #1a2e1a; color: #4caf50; }
+    .conn-badge.disconnected { background: #2e1a1a; color: #f44336; }
+
+    /* ── Main layout ── */
+    main {
+      flex: 1;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Intersection grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
+    .card {
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 14px 14px 12px;
+      transition: border-color 0.25s, box-shadow 0.25s;
+    }
+    .card.active {
+      border-color: #4caf50;
+      box-shadow: 0 0 14px #4caf5022;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .card-title {
+      font-size: 0.68rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .signal-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #2a2a2a;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .signal-dot.green {
+      background: #4caf50;
+      box-shadow: 0 0 8px #4caf5066;
+    }
+    .signal-dot.red {
+      background: #f44336;
+      box-shadow: 0 0 5px #f4433644;
+    }
+
+    .car-count {
+      font-size: 1.7rem;
+      font-weight: 700;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .bar-label {
+      font-size: 0.6rem;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .bar-track {
+      background: #1e1e1e;
+      border-radius: 3px;
+      height: 5px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #e65100, #f44336);
+      width: 0%;
+      transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ── Reward chart ── */
+    .chart-section {
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 14px;
+    }
+    .chart-title {
+      font-size: 0.68rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .chart-range {
+      font-size: 0.65rem;
+      color: #444;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Path<span>Mind</span></div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Step</div>
+      <div class="stat-value" id="hd-step">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Reward</div>
+      <div class="stat-value" id="hd-reward">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Total Reward</div>
+      <div class="stat-value" id="hd-total">—</div>
+    </div>
+  </div>
+  <div class="conn-badge disconnected" id="badge">Connecting</div>
+</header>
+
+<main>
+  <div class="grid" id="grid"></div>
+
+  <div class="chart-section">
+    <div class="chart-header">
+      <div class="chart-title">Step Reward</div>
+      <div class="chart-range" id="chart-range">last 50 steps</div>
+    </div>
+    <canvas id="chart" height="110"></canvas>
+  </div>
+</main>
+
+<script>
+  // ── Build intersection cards ──────────────────────────────────────────────
+  const grid = document.getElementById('grid');
+  const CAR_MAX = 10;
+
+  for (let i = 0; i < 10; i++) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.id = `card-${i}`;
+    card.innerHTML = `
+      <div class="card-header">
+        <span class="card-title">Intersection ${i + 1}</span>
+        <div class="signal-dot" id="dot-${i}"></div>
+      </div>
+      <div class="car-count" id="count-${i}">0.0</div>
+      <div class="bar-label">Car Volume</div>
+      <div class="bar-track"><div class="bar-fill" id="bar-${i}"></div></div>
+    `;
+    grid.appendChild(card);
+  }
+
+  // ── Chart ─────────────────────────────────────────────────────────────────
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  const history = [];   // last 50 reward values
+  const MAX_HIST = 50;
+
+  function drawChart() {
+    const W = canvas.offsetWidth;
+    const H = canvas.height;
+    canvas.width = W;
+    ctx.clearRect(0, 0, W, H);
+
+    if (history.length < 2) return;
+
+    const PAD = { top: 6, bottom: 6 };
+    const min = Math.min(...history);
+    const max = Math.max(...history);
+    const range = max - min || 1;
+    const drawH = H - PAD.top - PAD.bottom;
+
+    const toX = i => (i / (history.length - 1)) * W;
+    const toY = v => PAD.top + drawH - ((v - min) / range) * drawH;
+
+    const pts = history.map((v, i) => ({ x: toX(i), y: toY(v) }));
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, PAD.top, 0, H - PAD.bottom);
+    grad.addColorStop(0, 'rgba(76,175,80,0.25)');
+    grad.addColorStop(1, 'rgba(76,175,80,0.02)');
+
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, H - PAD.bottom);
+    pts.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(pts[pts.length - 1].x, H - PAD.bottom);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = '#4caf50';
+    ctx.lineWidth = 1.8;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // Latest dot
+    const last = pts[pts.length - 1];
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#4caf50';
+    ctx.fill();
+
+    // Min/max labels
+    ctx.font = '10px Segoe UI, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'right';
+    ctx.fillText(max.toFixed(1), W - 2, PAD.top + 9);
+    ctx.fillText(min.toFixed(1), W - 2, H - PAD.bottom - 3);
+  }
+
+  // ── State update ──────────────────────────────────────────────────────────
+  function onData(data) {
+    document.getElementById('hd-step').textContent = data.step;
+    document.getElementById('hd-reward').textContent = data.reward.toFixed(1);
+    document.getElementById('hd-total').textContent = data.total_reward.toFixed(0);
+
+    for (let i = 0; i < 10; i++) {
+      const vol = data.car_volume[i];
+      const sig = data.signal_states[i];
+      const isActive = data.action === i;
+
+      document.getElementById('count-' + i).textContent = vol.toFixed(1);
+      document.getElementById('bar-' + i).style.width =
+        Math.min(100, (vol / CAR_MAX) * 100).toFixed(1) + '%';
+
+      const dot = document.getElementById('dot-' + i);
+      dot.className = 'signal-dot ' + (sig > 0.5 ? 'green' : 'red');
+
+      document.getElementById('card-' + i).className =
+        'card' + (isActive ? ' active' : '');
+    }
+
+    history.push(data.reward);
+    if (history.length > MAX_HIST) history.shift();
+    drawChart();
+  }
+
+  // ── WebSocket with exponential back-off reconnect ─────────────────────────
+  let ws = null;
+  let retryDelay = 1000;
+
+  function connect() {
+    const badge = document.getElementById('badge');
+    badge.textContent = 'Connecting';
+    badge.className = 'conn-badge disconnected';
+
+    ws = new WebSocket(`ws://${location.host}/ws`);
+
+    ws.onopen = () => {
+      badge.textContent = 'Connected';
+      badge.className = 'conn-badge connected';
+      retryDelay = 1000;
+    };
+
+    ws.onmessage = e => {
+      try { onData(JSON.parse(e.data)); } catch (_) {}
+    };
+
+    ws.onclose = () => {
+      badge.textContent = 'Disconnected';
+      badge.className = 'conn-badge disconnected';
+      setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 1.6, 12000);
+    };
+
+    ws.onerror = () => ws.close();
+  }
+
+  connect();
+  window.addEventListener('resize', drawChart);
+</script>
+</body>
+</html>
