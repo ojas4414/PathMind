@@ -261,7 +261,8 @@
   }
 
   function drawPolicyChart(probs, action) {
-    const W = policyCanvas.offsetWidth;
+    const W = policyCanvas.offsetWidth || policyCanvas.parentElement.offsetWidth;
+    if (!W) { requestAnimationFrame(() => drawPolicyChart(probs, action)); return; }
     const H = policyCanvas.height;
     policyCanvas.width = W;
     pctx.clearRect(0, 0, W, H);
